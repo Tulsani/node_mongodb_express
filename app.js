@@ -3,6 +3,8 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
+var session = require('express-session');
+var Filestore = require('session-file-store')(session);
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
@@ -32,45 +34,57 @@ app.set('view engine', 'jade');
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser('12345-67890-09876-54321')); 
+// app.use(cookieParser('12345-67890-09876-54321')); 
 
+//inplace of cookier parser we use session
+app.use(session({
+  name:'session-id',
+  secret:'12345-67890-09876-54321',
+  saveUninitialized:false,
+  resave:false,
+  store:new Filestore()
+}));
 
+app.use('/', indexRouter);
+app.use('/users', usersRouter);
+
+// function auth (req, res, next) {
+//   // console.log(req.signedCookies);
+//   console.log(req.session);
+//   if(!req.session.user){
+//     var err = new Error('You are not authenticated');
+//     err.status = 401;
+//     return next(err);
+//   }
+//   else if (req.session.user === 'authenitcated'){
+//     next();
+//   }
+//   else{
+//     var err = new Error('You are not authenticated');
+//     err.status = 403;
+//     return next(err);
+//   }
+// }
 function auth (req, res, next) {
-  console.log(req.signedCookies);
-  if(!req.signedCookies.user){ //cookie not present so authorize first
-  var authHeader = req.headers.authorization;
-  if (!authHeader) {
-      var err = new Error('You are not authenticated!');
-      res.setHeader('WWW-Authenticate', 'Basic');
-      err.status = 401;
-      next(err);
-      return;
-  }
+  console.log(req.session);
 
-  var auth = new Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
-  var user = auth[0];
-  var pass = auth[1];
-  if (user == 'admin' && pass == 'password') {
-      res.cookie('user','admin',{signed:true}) //setup the cookie
-      next(); // authorized
-  } else {
-      var err = new Error('You are not authenticated!');
-      res.setHeader('WWW-Authenticate', 'Basic');      
-      err.status = 401;
-      next(err);
-  }
+if(!req.session.user) {
+    var err = new Error('You are not authenticated!');
+    err.status = 403;
+    return next(err);
 }
-else{//cookie present
-  if(req.signedCookies.user==='admin'){ //check for cookie value to be true
+else {
+  if (req.session.user === 'authenticated') {
     next();
   }
-  else{ //invalid value in the cookier
-    var err= new Error('Not autorised');
-    err.status = 401;
+  else {
+    var err = new Error('You are not authenticated!');
+    err.status = 403;
     return next(err);
   }
 }
 }
+
 
 app.use(auth);
 
